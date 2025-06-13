@@ -66,26 +66,24 @@ public class PathSelection {
 		return minTrust;
 	}
 
-	public List<String> selectPath(String clientIP, String destinationIP, AlphaParams guardParams, AlphaParams exitParams) {
+	public List<Relay> selectPath(String clientIP, String destinationIP, AlphaParams guardParams, AlphaParams exitParams) {
 		Map<Relay, Double> guardScores = new HashMap<>();
 		for (Relay g : relays)
 			guardScores.put(g, guardSecurity(clientIP, List.of(g)));
 		Relay chosenGuard = sortAndPickRelay(guardParams, guardScores);
 
 		Map<Relay, Double> exitScores = new HashMap<>();
-		for (Relay e : relays.stream().filter(Relay::canBeExit).toList())
+		for (Relay e : relays.stream().filter(r -> r.canBeExit() && !r.belongsToSameFamily(chosenGuard)).toList())
 			exitScores.put(e, exitSecurity(clientIP, chosenGuard, e, destinationIP));
 		Relay chosenExit = sortAndPickRelay(exitParams, exitScores);
 
-		List<Relay> middleCandidates = relays.stream()
-			.filter(r -> !r.family().contains(chosenGuard.fingerprint()) && !r.family().contains(chosenExit.fingerprint()))
-			.collect(Collectors.toList());
+		List<Relay> middleCandidates = relays.stream().filter(r -> !r.belongsToSameFamily(chosenGuard) && !r.belongsToSameFamily(chosenExit)).toList();
 		Relay chosenMiddle = pickWeightedRandom(middleCandidates);
 
-		List<String> path = new ArrayList<>(3);
-		path.add(chosenGuard.fingerprint());
-		path.add(chosenMiddle.fingerprint());
-		path.add(chosenExit.fingerprint());
+		List<Relay> path = new ArrayList<>(3);
+		path.add(chosenGuard);
+		path.add(chosenMiddle);
+		path.add(chosenExit);
 		return path;
 	}
 

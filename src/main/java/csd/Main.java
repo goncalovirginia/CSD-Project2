@@ -78,7 +78,7 @@ public class Main {
 			List<String> family = new ArrayList<>();
 			Iterator<JsonNode> familyJsonNodes = relayJsonNode.get("family").elements();
 			while (familyJsonNodes.hasNext()) {
-				family.add(familyJsonNodes.next().asText());
+				family.add(familyJsonNodes.next().asText().substring(1));
 			}
 
 			String asn = relayJsonNode.get("asn").asText();
