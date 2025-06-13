@@ -11,7 +11,7 @@ import java.util.*;
 
 public class Main {
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws Exception {
 		ClassLoader classLoader = Main.class.getClassLoader();
 
 		InputStream config = classLoader.getResourceAsStream("config.properties");
@@ -20,6 +20,7 @@ public class Main {
 
 		InputStream clientInput = classLoader.getResourceAsStream(properties.getProperty("client.input.file.path"));
 		InputStream torConsensus = classLoader.getResourceAsStream(properties.getProperty("tor.consensus.file.path"));
+		InputStream geoIPCountryCodeDB = classLoader.getResourceAsStream(properties.getProperty("geo.ip.country.code.db"));
 
 		ObjectMapper objectMapper = new ObjectMapper();
 		JsonNode clientInputJsonNode = objectMapper.readTree(clientInput);
@@ -29,7 +30,9 @@ public class Main {
 		String client = clientInputJsonNode.get("Client").asText();
 		String destination = clientInputJsonNode.get("Destination").asText();
 
-		List<Relay> relays = parseRelays(torConsensusJsonNode);
+		Map<String, Relay> relays = parseRelays(torConsensusJsonNode);
+
+		PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
 	}
 
 	private static List<Alliance> parseAlliances(JsonNode clientInputJsonNode) {
@@ -55,8 +58,8 @@ public class Main {
 		return alliances;
 	}
 
-	private static List<Relay> parseRelays(JsonNode torConsensusJsonNode) {
-		List<Relay> relays = new ArrayList<>();
+	private static Map<String, Relay> parseRelays(JsonNode torConsensusJsonNode) {
+		Map<String, Relay> relays = new HashMap<>();
 
 		Iterator<JsonNode> relayJsonNodes = torConsensusJsonNode.elements();
 		while (relayJsonNodes.hasNext()) {
@@ -81,7 +84,7 @@ public class Main {
 			String asn = relayJsonNode.get("asn").asText();
 			String exit = relayJsonNode.get("exit").asText();
 
-			relays.add(new Relay(fingerprint, nickname, ip, asn, exit, port, measured, average, burst, family));
+			relays.put(ip, new Relay(fingerprint, nickname, ip, asn, exit, port, measured, average, burst, family));
 		}
 
 		return relays;
