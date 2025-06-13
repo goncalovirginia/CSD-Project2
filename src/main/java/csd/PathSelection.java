@@ -11,10 +11,10 @@ import java.util.stream.Collectors;
 public class PathSelection {
 
 	private final List<Alliance> alliances;
-	private final Map<String, Relay> relays;
+	private final List<Relay> relays;
 	private final GeoIPWrapper geoIPWrapper;
 
-	public PathSelection(List<Alliance> alliances, Map<String, Relay> relays, InputStream geoIPCountryCodeDB) throws Exception {
+	public PathSelection(List<Alliance> alliances, List<Relay> relays, InputStream geoIPCountryCodeDB) throws Exception {
 		this.alliances = alliances;
 		this.relays = relays;
 		this.geoIPWrapper = new GeoIPWrapper(geoIPCountryCodeDB);
@@ -67,50 +67,17 @@ public class PathSelection {
 	}
 
 	public List<String> selectPath(String clientIP, String destinationIP, AlphaParams guardParams, AlphaParams exitParams) {
-		List<Relay> guards = relays.values().stream().toList();
-		List<Relay> exits = relays.values().stream().filter(Relay::canBeExit).toList();
-
 		Map<Relay, Double> guardScores = new HashMap<>();
-		for (Relay g : guards) {
-			double score = guardSecurity(clientIP, List.of(g));
-			guardScores.put(g, score);
-		}
-		double maxGuardScore = guardScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
-
-		List<Relay> safeGuards = new ArrayList<>();
-		List<Relay> acceptableGuards = new ArrayList<>();
-		for (Relay g : guards) {
-			double s = guardScores.get(g);
-			if (s >= maxGuardScore * guardParams.safeUpper() && (1 - s) <= (1 - maxGuardScore) * guardParams.safeLower()) {
-				safeGuards.add(g);
-			} else if (s >= maxGuardScore * guardParams.acceptUpper() && (1 - s) <= (1 - maxGuardScore) * guardParams.acceptLower()) {
-				acceptableGuards.add(g);
-			}
-		}
-		List<Relay> usableGuards = !safeGuards.isEmpty() ? safeGuards : acceptableGuards;
-		Relay chosenGuard = pickWeightedRandom(usableGuards);
+		for (Relay g : relays)
+			guardScores.put(g, guardSecurity(clientIP, List.of(g)));
+		Relay chosenGuard = sortAndPickRelay(guardParams, guardScores);
 
 		Map<Relay, Double> exitScores = new HashMap<>();
-		for (Relay e : exits) {
-			double score = exitSecurity(clientIP, chosenGuard, e, destinationIP);
-			exitScores.put(e, score);
-		}
-		double maxExitScore = exitScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+		for (Relay e : relays.stream().filter(Relay::canBeExit).toList())
+			exitScores.put(e, exitSecurity(clientIP, chosenGuard, e, destinationIP));
+		Relay chosenExit = sortAndPickRelay(exitParams, exitScores);
 
-		List<Relay> safeExits = new ArrayList<>();
-		List<Relay> acceptableExits = new ArrayList<>();
-		for (Relay e : exits) {
-			double s = exitScores.get(e);
-			if (s >= maxExitScore * exitParams.safeUpper() && (1 - s) <= (1 - maxExitScore) * exitParams.safeLower()) {
-				safeExits.add(e);
-			} else if (s >= maxExitScore * exitParams.acceptUpper() && (1 - s) <= (1 - maxExitScore) * exitParams.acceptLower()) {
-				acceptableExits.add(e);
-			}
-		}
-		List<Relay> usableExits = !safeExits.isEmpty() ? safeExits : acceptableExits;
-		Relay chosenExit = pickWeightedRandom(usableExits);
-
-		List<Relay> middleCandidates = relays.values().stream()
+		List<Relay> middleCandidates = relays.stream()
 			.filter(r -> !r.family().contains(chosenGuard.fingerprint()) && !r.family().contains(chosenExit.fingerprint()))
 			.collect(Collectors.toList());
 		Relay chosenMiddle = pickWeightedRandom(middleCandidates);
@@ -120,6 +87,24 @@ public class PathSelection {
 		path.add(chosenMiddle.fingerprint());
 		path.add(chosenExit.fingerprint());
 		return path;
+	}
+
+	private Relay sortAndPickRelay(AlphaParams alphaParams, Map<Relay, Double> relayScores) {
+		double maxRelayScore = relayScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+		List<Relay> safeRelays = new ArrayList<>();
+		List<Relay> acceptableRelays = new ArrayList<>();
+
+		for (Map.Entry<Relay, Double> entry : relayScores.entrySet()) {
+			double s = entry.getValue();
+			if (s >= maxRelayScore * alphaParams.safeUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.safeLower()) {
+				safeRelays.add(entry.getKey());
+			} else if (s >= maxRelayScore * alphaParams.acceptUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.acceptLower()) {
+				acceptableRelays.add(entry.getKey());
+			}
+		}
+
+		List<Relay> usableRelays = !safeRelays.isEmpty() ? safeRelays : acceptableRelays;
+		return pickWeightedRandom(usableRelays);
 	}
 
 	private double getCountryTrust(String countryCode) {

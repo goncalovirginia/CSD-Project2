@@ -30,7 +30,7 @@ public class Main {
 		String client = clientInputJsonNode.get("Client").asText();
 		String destination = clientInputJsonNode.get("Destination").asText();
 
-		Map<String, Relay> relays = parseRelays(torConsensusJsonNode);
+		List<Relay> relays = parseRelays(torConsensusJsonNode);
 
 		PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
 	}
@@ -58,8 +58,8 @@ public class Main {
 		return alliances;
 	}
 
-	private static Map<String, Relay> parseRelays(JsonNode torConsensusJsonNode) {
-		Map<String, Relay> relays = new HashMap<>();
+	private static List<Relay> parseRelays(JsonNode torConsensusJsonNode) {
+		List<Relay> relays = new ArrayList<>();
 
 		Iterator<JsonNode> relayJsonNodes = torConsensusJsonNode.elements();
 		while (relayJsonNodes.hasNext()) {
@@ -84,7 +84,7 @@ public class Main {
 			String asn = relayJsonNode.get("asn").asText();
 			String exit = relayJsonNode.get("exit").asText();
 
-			relays.put(ip, new Relay(fingerprint, nickname, ip, asn, exit, port, measured, average, burst, family));
+			relays.add(new Relay(fingerprint, nickname, ip, asn, exit, port, measured, average, burst, family));
 		}
 
 		return relays;
