@@ -15,7 +15,7 @@ public class PathSelection {
 
 	public PathSelection(List<Alliance> alliances, List<Relay> relays, InputStream geoIPCountryCodeDB) throws Exception {
 		this.alliances = alliances;
-		this.relays = relays;
+		this.relays = relays.stream().filter(r -> r.bandwidthMeasured() > 0).toList();
 		this.geoIPWrapper = new GeoIPWrapper(geoIPCountryCodeDB);
 	}
 
@@ -69,14 +69,16 @@ public class PathSelection {
 		Map<Relay, Double> guardScores = new HashMap<>();
 		for (Relay g : relays)
 			guardScores.put(g, guardSecurity(clientIP, List.of(g)));
-		Relay chosenGuard = sortAndPickRelay(guardParams, guardScores);
+		Relay chosenGuard = sortAndPickRelay(guardParams, guardScores, "guard");
 
 		Map<Relay, Double> exitScores = new HashMap<>();
 		for (Relay e : relays.stream().filter(r -> r.canBeExit() && !r.belongsToSameFamily(chosenGuard)).toList())
 			exitScores.put(e, exitSecurity(clientIP, chosenGuard, e, destinationIP));
-		Relay chosenExit = sortAndPickRelay(exitParams, exitScores);
+		Relay chosenExit = sortAndPickRelay(exitParams, exitScores, "exit");
 
 		List<Relay> middleCandidates = relays.stream().filter(r -> !r.belongsToSameFamily(chosenGuard) && !r.belongsToSameFamily(chosenExit)).toList();
+		if (middleCandidates.isEmpty())
+			throw new PathSelectionException("No usable middle relays found.");
 		Relay chosenMiddle = pickWeightedRandom(middleCandidates);
 
 		List<Relay> path = new ArrayList<>(3);
@@ -86,7 +88,7 @@ public class PathSelection {
 		return path;
 	}
 
-	private Relay sortAndPickRelay(AlphaParams alphaParams, Map<Relay, Double> relayScores) {
+	private Relay sortAndPickRelay(AlphaParams alphaParams, Map<Relay, Double> relayScores, String relayType) {
 		double maxRelayScore = relayScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
 		List<Relay> safeRelays = new ArrayList<>();
 		List<Relay> acceptableRelays = new ArrayList<>();
@@ -100,6 +102,10 @@ public class PathSelection {
 		}
 
 		List<Relay> usableRelays = !safeRelays.isEmpty() ? safeRelays : acceptableRelays;
+
+		if (usableRelays.isEmpty())
+			throw new PathSelectionException("No usable " + relayType + " relays found.");
+
 		return pickWeightedRandom(usableRelays);
 	}
 

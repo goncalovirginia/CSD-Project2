@@ -42,15 +42,19 @@ public class Main {
 
 		List<Relay> relays = parseRelays(torConsensusJsonNode);
 
-		PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
-		List<Relay> selectedPath = pathSelection.selectPath(client, destination, guardParams, exitParams);
+		try {
+			PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
+			List<Relay> selectedPath = pathSelection.selectPath(client, destination, guardParams, exitParams);
 
-		ObjectNode selectedPathJson = objectMapper.createObjectNode();
-		selectedPathJson.put("guard", selectedPath.get(0).fingerprint());
-		selectedPathJson.put("middle", selectedPath.get(1).fingerprint());
-		selectedPathJson.put("exit", selectedPath.get(2).fingerprint());
+			ObjectNode selectedPathJson = objectMapper.createObjectNode();
+			selectedPathJson.put("guard", selectedPath.get(0).fingerprint());
+			selectedPathJson.put("middle", selectedPath.get(1).fingerprint());
+			selectedPathJson.put("exit", selectedPath.get(2).fingerprint());
 
-		System.out.println(selectedPathJson.toPrettyString());
+			System.out.println(selectedPathJson.toPrettyString());
+		} catch (PathSelectionException e) {
+			System.out.println(e.getMessage());
+		}
 	}
 
 	private static AlphaParams parseAlphaParams(Properties props, String relayType) {

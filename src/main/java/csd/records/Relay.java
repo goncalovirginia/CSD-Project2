@@ -9,7 +9,8 @@ public record Relay(String fingerprint, String nickname, String ip, String asn, 
 	}
 
 	public boolean belongsToSameFamily(Relay other) {
-		return this.family.contains(other.fingerprint) || other.family.contains(this.fingerprint);
+		return this.fingerprint.equals(other.fingerprint) ||
+			this.family.contains(other.fingerprint) || other.family.contains(this.fingerprint);
 	}
 
 }
