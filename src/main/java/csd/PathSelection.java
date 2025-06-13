@@ -1,10 +1,12 @@
 package csd;
 
 import csd.records.Alliance;
+import csd.records.AlphaParams;
 import csd.records.Relay;
 
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class PathSelection {
 
@@ -18,7 +20,7 @@ public class PathSelection {
 		this.geoIPWrapper = new GeoIPWrapper(geoIPCountryCodeDB);
 	}
 
-	public double guardSecurity(String clientIP, Set<Relay> guards) {
+	public double guardSecurity(String clientIP, List<Relay> guards) {
 		String clientCountryCode = geoIPWrapper.getCountryCode(clientIP);
 		Set<String> clientAllies = getAlliedCountries(clientCountryCode);
 		List<Double> scores = new ArrayList<>();
@@ -64,8 +66,60 @@ public class PathSelection {
 		return minTrust;
 	}
 
-	public List<String> selectPath(List<Relay> relays, Map<String, String> guardParams, Map<String, String> exitParams) {
-		return List.of();
+	public List<String> selectPath(String clientIP, String destinationIP, AlphaParams guardParams, AlphaParams exitParams) {
+		List<Relay> guards = relays.values().stream().toList();
+		List<Relay> exits = relays.values().stream().filter(Relay::canBeExit).toList();
+
+		Map<Relay, Double> guardScores = new HashMap<>();
+		for (Relay g : guards) {
+			double score = guardSecurity(clientIP, List.of(g));
+			guardScores.put(g, score);
+		}
+		double maxGuardScore = guardScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+
+		List<Relay> safeGuards = new ArrayList<>();
+		List<Relay> acceptableGuards = new ArrayList<>();
+		for (Relay g : guards) {
+			double s = guardScores.get(g);
+			if (s >= maxGuardScore * guardParams.safeUpper() && (1 - s) <= (1 - maxGuardScore) * guardParams.safeLower()) {
+				safeGuards.add(g);
+			} else if (s >= maxGuardScore * guardParams.acceptUpper() && (1 - s) <= (1 - maxGuardScore) * guardParams.acceptLower()) {
+				acceptableGuards.add(g);
+			}
+		}
+		List<Relay> usableGuards = !safeGuards.isEmpty() ? safeGuards : acceptableGuards;
+		Relay chosenGuard = pickWeightedRandom(usableGuards);
+
+		Map<Relay, Double> exitScores = new HashMap<>();
+		for (Relay e : exits) {
+			double score = exitSecurity(clientIP, chosenGuard, e, destinationIP);
+			exitScores.put(e, score);
+		}
+		double maxExitScore = exitScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+
+		List<Relay> safeExits = new ArrayList<>();
+		List<Relay> acceptableExits = new ArrayList<>();
+		for (Relay e : exits) {
+			double s = exitScores.get(e);
+			if (s >= maxExitScore * exitParams.safeUpper() && (1 - s) <= (1 - maxExitScore) * exitParams.safeLower()) {
+				safeExits.add(e);
+			} else if (s >= maxExitScore * exitParams.acceptUpper() && (1 - s) <= (1 - maxExitScore) * exitParams.acceptLower()) {
+				acceptableExits.add(e);
+			}
+		}
+		List<Relay> usableExits = !safeExits.isEmpty() ? safeExits : acceptableExits;
+		Relay chosenExit = pickWeightedRandom(usableExits);
+
+		List<Relay> middleCandidates = relays.values().stream()
+			.filter(r -> !r.family().contains(chosenGuard.fingerprint()) && !r.family().contains(chosenExit.fingerprint()))
+			.collect(Collectors.toList());
+		Relay chosenMiddle = pickWeightedRandom(middleCandidates);
+
+		List<String> path = new ArrayList<>(3);
+		path.add(chosenGuard.fingerprint());
+		path.add(chosenMiddle.fingerprint());
+		path.add(chosenExit.fingerprint());
+		return path;
 	}
 
 	private double getCountryTrust(String countryCode) {
@@ -82,6 +136,17 @@ public class PathSelection {
 			if (alliance.contains(countryCode))
 				allies.addAll(alliance.countryCodes());
 		return allies;
+	}
+
+	private Relay pickWeightedRandom(List<Relay> relays) {
+		double total = relays.stream().mapToDouble(Relay::bandwidthMeasured).sum();
+		double rnd = Math.random() * total;
+		double cumulative = 0.0;
+		for (Relay r : relays) {
+			cumulative += r.bandwidthMeasured();
+			if (rnd <= cumulative) return r;
+		}
+		return relays.getLast();
 	}
 
 }
