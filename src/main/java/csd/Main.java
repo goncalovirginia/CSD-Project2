@@ -2,25 +2,35 @@ package csd;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import csd.records.Alliance;
+import csd.records.AlphaParams;
 import csd.records.Relay;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
 
 public class Main {
 
 	public static void main(String[] args) throws Exception {
 		ClassLoader classLoader = Main.class.getClassLoader();
 
-		InputStream config = classLoader.getResourceAsStream("config.properties");
+		InputStream config = classLoader.getResourceAsStream("files.properties");
 		Properties properties = new Properties();
 		properties.load(config);
 
-		InputStream clientInput = classLoader.getResourceAsStream(properties.getProperty("client.input.file.path"));
-		InputStream torConsensus = classLoader.getResourceAsStream(properties.getProperty("tor.consensus.file.path"));
+		InputStream clientInput = classLoader.getResourceAsStream(properties.getProperty("client.input.file"));
+		InputStream torConsensus = classLoader.getResourceAsStream(properties.getProperty("tor.consensus.file"));
 		InputStream geoIPCountryCodeDB = classLoader.getResourceAsStream(properties.getProperty("geo.ip.country.code.db"));
+		InputStream alphaParams = classLoader.getResourceAsStream(properties.getProperty("alpha.params.file"));
+
+		Properties alphaParamsProps = new Properties();
+		alphaParamsProps.load(alphaParams);
+		AlphaParams guardParams = parseAlphaParams(alphaParamsProps, "guard");
+		AlphaParams exitParams = parseAlphaParams(alphaParamsProps, "exit");
 
 		ObjectMapper objectMapper = new ObjectMapper();
 		JsonNode clientInputJsonNode = objectMapper.readTree(clientInput);
@@ -33,6 +43,24 @@ public class Main {
 		List<Relay> relays = parseRelays(torConsensusJsonNode);
 
 		PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
+		List<Relay> selectedPath = pathSelection.selectPath(client, destination, guardParams, exitParams);
+
+		ObjectNode selectedPathJson = objectMapper.createObjectNode();
+		selectedPathJson.put("guard", selectedPath.get(0).fingerprint());
+		selectedPathJson.put("middle", selectedPath.get(1).fingerprint());
+		selectedPathJson.put("exit", selectedPath.get(2).fingerprint());
+
+		System.out.println(selectedPathJson.toPrettyString());
+	}
+
+	private static AlphaParams parseAlphaParams(Properties props, String relayType) {
+		return new AlphaParams(
+			Double.parseDouble(props.getProperty(relayType + ".safe_upper")),
+			Double.parseDouble(props.getProperty(relayType + ".safe_lower")),
+			Double.parseDouble(props.getProperty(relayType + ".accept_upper")),
+			Double.parseDouble(props.getProperty(relayType + ".accept_lower")),
+			Double.parseDouble(props.getProperty(relayType + ".bandwidth_frac"))
+		);
 	}
 
 	private static List<Alliance> parseAlliances(JsonNode clientInputJsonNode) {

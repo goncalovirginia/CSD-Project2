@@ -6,7 +6,6 @@ import csd.records.Relay;
 
 import java.io.InputStream;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class PathSelection {
 
@@ -94,11 +93,10 @@ public class PathSelection {
 
 		for (Map.Entry<Relay, Double> entry : relayScores.entrySet()) {
 			double s = entry.getValue();
-			if (s >= maxRelayScore * alphaParams.safeUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.safeLower()) {
+			if (s >= maxRelayScore * alphaParams.safeUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.safeLower())
 				safeRelays.add(entry.getKey());
-			} else if (s >= maxRelayScore * alphaParams.acceptUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.acceptLower()) {
+			else if (s >= maxRelayScore * alphaParams.acceptUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.acceptLower())
 				acceptableRelays.add(entry.getKey());
-			}
 		}
 
 		List<Relay> usableRelays = !safeRelays.isEmpty() ? safeRelays : acceptableRelays;
