@@ -114,7 +114,7 @@ public class Main {
 			}
 
 			String asn = relayJsonNode.get("asn").asText();
-			String exit = relayJsonNode.get("exit").asText();
+			List<String> exit = List.of(relayJsonNode.get("exit").asText().split(", "));
 
 			relays.add(new Relay(fingerprint, nickname, ip, asn, exit, port, measured, average, burst, family));
 		}

@@ -1,4 +1,4 @@
-package csd;
+package csd.util;
 
 import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.model.CountryResponse;

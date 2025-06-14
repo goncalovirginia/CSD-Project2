@@ -3,6 +3,7 @@ package csd;
 import csd.records.Alliance;
 import csd.records.AlphaParams;
 import csd.records.Relay;
+import csd.util.GeoIPWrapper;
 
 import java.io.InputStream;
 import java.util.*;
@@ -91,7 +92,7 @@ public class PathSelection {
 	private List<Relay> rankExitRelays(String clientIP, Relay guard, String destinationIP, AlphaParams params) {
 		Map<Relay, Double> exitScores = new HashMap<>();
 		for (Relay r : relays)
-			if (r.canBeExit() && !r.belongsToSameFamily(guard))
+			if (r.canBeExit(destinationIP) && !r.belongsToSameFamily(guard))
 				exitScores.put(r, exitSecurity(clientIP, guard, r, destinationIP));
 
 		return sortRelaysByScore(exitScores, params);
