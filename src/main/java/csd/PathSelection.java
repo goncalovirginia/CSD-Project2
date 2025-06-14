@@ -111,16 +111,12 @@ public class PathSelection {
 				acceptable.add(entry.getKey());
 		}
 
-		Comparator<Relay> byScoreDesc = Comparator.comparingDouble(relayScores::get);
-		byScoreDesc = byScoreDesc.reversed();
+		List<Relay> shuffledSafe = bandwidthWeightedShuffle(safe);
+		List<Relay> shuffledAcceptable = bandwidthWeightedShuffle(acceptable);
 
-		safe.sort(byScoreDesc);
-		acceptable.sort(byScoreDesc);
-
-		List<Relay> sortedDescScore = new ArrayList<>(safe);
-		sortedDescScore.addAll(acceptable);
-
-		return sortedDescScore;
+		List<Relay> result = new ArrayList<>(shuffledSafe);
+		result.addAll(shuffledAcceptable);
+		return result;
 	}
 
 	private double getCountryTrust(String countryCode) {
@@ -148,6 +144,18 @@ public class PathSelection {
 			if (rnd <= cumulative) return r;
 		}
 		return relays.getLast();
+	}
+
+	private List<Relay> bandwidthWeightedShuffle(List<Relay> relays) {
+		List<Relay> toBeShuffled = new ArrayList<>(relays), shuffled = new ArrayList<>();
+
+		while (!toBeShuffled.isEmpty()) {
+			Relay chosen = pickWeightedRandom(toBeShuffled);
+			shuffled.add(chosen);
+			toBeShuffled.remove(chosen);
+		}
+
+		return shuffled;
 	}
 
 }

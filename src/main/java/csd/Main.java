@@ -2,6 +2,7 @@ package csd;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import csd.records.Alliance;
 import csd.records.AlphaParams;
@@ -18,10 +19,11 @@ public class Main {
 	public static void main(String[] args) throws Exception {
 		ClassLoader classLoader = Main.class.getClassLoader();
 
-		InputStream config = classLoader.getResourceAsStream("files.properties");
+		InputStream config = classLoader.getResourceAsStream("application.properties");
 		Properties properties = new Properties();
 		properties.load(config);
 
+		int desiredPaths = Integer.parseInt(properties.getProperty("number.desired.paths"));
 		InputStream clientInput = classLoader.getResourceAsStream(properties.getProperty("client.input.file"));
 		InputStream torConsensus = classLoader.getResourceAsStream(properties.getProperty("tor.consensus.file"));
 		InputStream geoIPCountryCodeDB = classLoader.getResourceAsStream(properties.getProperty("geo.ip.country.code.db"));
@@ -44,14 +46,20 @@ public class Main {
 
 		try {
 			PathSelection pathSelection = new PathSelection(alliances, relays, geoIPCountryCodeDB);
-			List<Relay> selectedPath = pathSelection.selectPath(client, destination, guardParams, exitParams);
+			ArrayNode pathsArrayNode = objectMapper.createArrayNode();
 
-			ObjectNode selectedPathJson = objectMapper.createObjectNode();
-			selectedPathJson.put("guard", selectedPath.get(0).fingerprint());
-			selectedPathJson.put("middle", selectedPath.get(1).fingerprint());
-			selectedPathJson.put("exit", selectedPath.get(2).fingerprint());
+			for (int i = 0; i < desiredPaths; i++) {
+				List<Relay> selectedPath = pathSelection.selectPath(client, destination, guardParams, exitParams);
 
-			System.out.println(selectedPathJson.toPrettyString());
+				ObjectNode pathObjectNode = objectMapper.createObjectNode();
+				pathObjectNode.put("guard", selectedPath.get(0).fingerprint());
+				pathObjectNode.put("middle", selectedPath.get(1).fingerprint());
+				pathObjectNode.put("exit", selectedPath.get(2).fingerprint());
+
+				pathsArrayNode.add(pathObjectNode);
+			}
+
+			System.out.println(pathsArrayNode.toPrettyString());
 		} catch (PathSelectionException e) {
 			System.out.println(e.getMessage());
 		}
