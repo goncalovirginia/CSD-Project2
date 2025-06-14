@@ -10,6 +10,8 @@ import java.util.*;
 
 public class PathSelection {
 
+	private static final double NON_INTERSECTING_GUARD_PENALTY = 0.75;
+
 	private final List<Alliance> alliances;
 	private final List<Relay> relays;
 	private final GeoIPWrapper geoIPWrapper;
@@ -20,25 +22,25 @@ public class PathSelection {
 		this.geoIPWrapper = new GeoIPWrapper(geoIPCountryCodeDB);
 	}
 
-	public double guardSecurity(String clientIP, List<Relay> guards) {
+	public Map<Relay, Double> guardSecurity(String clientIP, List<Relay> guards) {
 		String clientCountryCode = geoIPWrapper.getCountryCode(clientIP);
 		Set<String> clientAllies = getAlliedCountries(clientCountryCode);
-		List<Double> scores = new ArrayList<>();
+		Map<Relay, Double> guardScores = new HashMap<>();
 
 		for (Relay guard : guards) {
 			String guardCountryCode = geoIPWrapper.getCountryCode(guard.ip());
 			Set<String> guardAllies = getAlliedCountries(guardCountryCode);
-			double guardCountryTrust = getCountryTrust(guardCountryCode);
+			double guardTrust = getCountryTrust(guardCountryCode);
 
 			Set<String> intersectingCountryCodes = new HashSet<>(clientAllies);
 			intersectingCountryCodes.retainAll(guardAllies);
 
-			if (intersectingCountryCodes.isEmpty()) guardCountryTrust *= 0.5;
+			if (intersectingCountryCodes.isEmpty()) guardTrust *= NON_INTERSECTING_GUARD_PENALTY;
 
-			scores.add(guardCountryTrust);
+			guardScores.put(guard, guardTrust);
 		}
 
-		return scores.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+		return guardScores;
 	}
 
 	public double exitSecurity(String clientIP, Relay guard, Relay exit, String destinationIP) {
@@ -82,10 +84,7 @@ public class PathSelection {
 	}
 
 	private List<Relay> rankGuardRelays(String clientIP, AlphaParams params) {
-		Map<Relay, Double> guardScores = new HashMap<>();
-		for (Relay r : relays)
-			guardScores.put(r, guardSecurity(clientIP, List.of(r)));
-
+		Map<Relay, Double> guardScores = guardSecurity(clientIP, relays);
 		return sortRelaysByScore(guardScores, params);
 	}
 
