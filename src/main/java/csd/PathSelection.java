@@ -66,47 +66,60 @@ public class PathSelection {
 	}
 
 	public List<Relay> selectPath(String clientIP, String destinationIP, AlphaParams guardParams, AlphaParams exitParams) {
-		Map<Relay, Double> guardScores = new HashMap<>();
-		for (Relay g : relays)
-			guardScores.put(g, guardSecurity(clientIP, List.of(g)));
-		Relay chosenGuard = sortAndPickRelay(guardParams, guardScores, "guard");
+		for (Relay guardCandidate : rankGuardRelays(clientIP, guardParams)) {
+			for (Relay exitCandidate : rankExitRelays(clientIP, guardCandidate, destinationIP, exitParams)) {
+				List<Relay> middleCandidates = relays.stream().filter(r -> !r.belongsToSameFamily(guardCandidate) && !r.belongsToSameFamily(exitCandidate)).toList();
 
-		Map<Relay, Double> exitScores = new HashMap<>();
-		for (Relay e : relays.stream().filter(r -> r.canBeExit() && !r.belongsToSameFamily(chosenGuard)).toList())
-			exitScores.put(e, exitSecurity(clientIP, chosenGuard, e, destinationIP));
-		Relay chosenExit = sortAndPickRelay(exitParams, exitScores, "exit");
+				if (!middleCandidates.isEmpty()) {
+					Relay chosenMiddle = pickWeightedRandom(middleCandidates);
+					return List.of(guardCandidate, chosenMiddle, exitCandidate);
+				}
+			}
+		}
 
-		List<Relay> middleCandidates = relays.stream().filter(r -> !r.belongsToSameFamily(chosenGuard) && !r.belongsToSameFamily(chosenExit)).toList();
-		if (middleCandidates.isEmpty())
-			throw new PathSelectionException("No usable middle relays found.");
-		Relay chosenMiddle = pickWeightedRandom(middleCandidates);
-
-		List<Relay> path = new ArrayList<>(3);
-		path.add(chosenGuard);
-		path.add(chosenMiddle);
-		path.add(chosenExit);
-		return path;
+		throw new PathSelectionException("No valid path could be constructed.");
 	}
 
-	private Relay sortAndPickRelay(AlphaParams alphaParams, Map<Relay, Double> relayScores, String relayType) {
-		double maxRelayScore = relayScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
-		List<Relay> safeRelays = new ArrayList<>();
-		List<Relay> acceptableRelays = new ArrayList<>();
+	private List<Relay> rankGuardRelays(String clientIP, AlphaParams params) {
+		Map<Relay, Double> guardScores = new HashMap<>();
+		for (Relay r : relays)
+			guardScores.put(r, guardSecurity(clientIP, List.of(r)));
+
+		return sortRelaysByScore(guardScores, params);
+	}
+
+	private List<Relay> rankExitRelays(String clientIP, Relay guard, String destinationIP, AlphaParams params) {
+		Map<Relay, Double> exitScores = new HashMap<>();
+		for (Relay r : relays)
+			if (r.canBeExit() && !r.belongsToSameFamily(guard))
+				exitScores.put(r, exitSecurity(clientIP, guard, r, destinationIP));
+
+		return sortRelaysByScore(exitScores, params);
+	}
+
+	private List<Relay> sortRelaysByScore(Map<Relay, Double> relayScores, AlphaParams alphaParams) {
+		double maxScore = relayScores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+		List<Relay> safe = new ArrayList<>();
+		List<Relay> acceptable = new ArrayList<>();
 
 		for (Map.Entry<Relay, Double> entry : relayScores.entrySet()) {
 			double s = entry.getValue();
-			if (s >= maxRelayScore * alphaParams.safeUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.safeLower())
-				safeRelays.add(entry.getKey());
-			else if (s >= maxRelayScore * alphaParams.acceptUpper() && (1 - s) <= (1 - maxRelayScore) * alphaParams.acceptLower())
-				acceptableRelays.add(entry.getKey());
+			if (s >= maxScore * alphaParams.safeUpper() && (1 - s) <= (1 - maxScore) * alphaParams.safeLower())
+				safe.add(entry.getKey());
+			else if (s >= maxScore * alphaParams.acceptUpper() && (1 - s) <= (1 - maxScore) * alphaParams.acceptLower())
+				acceptable.add(entry.getKey());
 		}
 
-		List<Relay> usableRelays = !safeRelays.isEmpty() ? safeRelays : acceptableRelays;
+		Comparator<Relay> byScoreDesc = Comparator.comparingDouble(relayScores::get);
+		byScoreDesc = byScoreDesc.reversed();
 
-		if (usableRelays.isEmpty())
-			throw new PathSelectionException("No usable " + relayType + " relays found.");
+		safe.sort(byScoreDesc);
+		acceptable.sort(byScoreDesc);
 
-		return pickWeightedRandom(usableRelays);
+		List<Relay> sortedDescScore = new ArrayList<>(safe);
+		sortedDescScore.addAll(acceptable);
+
+		return sortedDescScore;
 	}
 
 	private double getCountryTrust(String countryCode) {
