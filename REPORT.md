@@ -4,7 +4,7 @@
 
 ## Overview
 
-This report documents the projects' simplified implementation of the TrustAll variant of the Trust-Aware Path Selection (TAPS) algorithm, focused around the data-sharing dynamics between country-level alliances, in order to generate safer Tor circuits which minimize surveillance around guard and exit relays.
+This report documents the projects' implementation of a simplified version of the TrustAll variant of the Trust-Aware Path Selection (TAPS) algorithm, focused around the data-sharing dynamics between country-level alliances, in order to generate safer Tor circuits which minimize surveillance around guard and exit relays.
 It assumes direct inter-country links and abstracts away the complexities of real-world Internet routing. The goal is to select paths that optimize both anonymity and performance using preprocessed Tor relay data and a configurable trust model.
 
 ## 1. guardSecurity(String clientIP, List<Relay> guards)
