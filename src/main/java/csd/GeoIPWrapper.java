@@ -20,7 +20,7 @@ public class GeoIPWrapper {
 			CountryResponse response = reader.country(ipAddress);
 			return response.getCountry().getIsoCode();
 		} catch (Exception e) {
-			return null;
+			return "??";
 		}
 	}
 
